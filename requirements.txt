@@ -12,3 +12,4 @@ scikit-learn
 fire
 dl-cliche
 soundfile
+wandb

@@ -9,6 +9,8 @@ from tqdm import tqdm
 import yaml
 from easydict import EasyDict
 import torchaudio.transforms as T
+import wandb
+import os
 
 from src.dataset import DegradationDataset
 from src.model import SoxDegradationClassifier
@@ -68,6 +70,10 @@ class CombinedLoss(nn.Module):
 # --- Main Training Logic ---
 def main():
     """Main training loop."""
+    # --- W&B Initialization ---
+    project_name = os.environ.get("PROJECT_NAME", "audio-degradation-classifier")
+    wandb.init(project=project_name, config=cfg)
+
     # --- Data Loading ---
     logging.info("Initializing dataset...")
     dataset = DegradationDataset(
@@ -132,6 +138,15 @@ def main():
                 cls=f'{loss_c.item():.4f}', 
                 reg=f'{loss_r.item():.4f}'
             )
+
+            # Log metrics to W&B
+            wandb.log({
+                'epoch': epoch,
+                'step': i,
+                'loss': loss.item(),
+                'classification_loss': loss_c.item(),
+                'regression_loss': loss_r.item()
+            })
 
     logging.info('Finished Training')
 

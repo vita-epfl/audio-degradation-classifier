@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=0
-#SBATCH --time=00:20:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=h100
 #SBATCH --output=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.out
 #SBATCH --error=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.err
@@ -31,6 +31,7 @@ export PATH=$HOME/local/sox/bin:$PATH
 export LD_LIBRARY_PATH=$HOME/local/sox/lib:$LD_LIBRARY_PATH
 
 export WANDB_API_KEY=6bc7bb9456313ef80ea74ee7877c4c927de72220
+export PROJECT_NAME="audio-degradation-classifier"
 
 cd /work/vita/alefevre/programs/audio-degradation-classifier
 
