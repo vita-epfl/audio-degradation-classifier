@@ -78,3 +78,32 @@ Already came close to the top solution with ResNetish, and still have space for 
 ## References
 
 - [1] S. Hershey et al., ‘CNN Architectures for Large-Scale Audio Classification’,\ in International Conference on Acoustics, Speech and Signal Processing (ICASSP),2017\ Available: https://arxiv.org/abs/1609.09430, https://ai.google/research/pubs/pub45611
+
+## Install sox
+
+if you don't have sox installed, you can install it with the following commands:
+
+```bash
+# Get SoX source
+wget https://sourceforge.net/projects/sox/files/sox/14.4.2/sox-14.4.2.tar.gz
+
+# Extract and configure
+tar -xvzf sox-14.4.2.tar.gz
+
+# Configure to install into your home directory
+./configure --prefix=$HOME/.local
+make
+make install
+```
+
+then add the following line to your .bashrc or .zshrc:
+
+```bash
+export PATH=$HOME/.local/bin:$PATH
+```
+
+verify installation:
+
+```bash
+sox --version
+```
