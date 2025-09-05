@@ -3,13 +3,12 @@ import torchaudio
 import numpy as np
 import random
 from pathlib import Path
-import yaml
 from easydict import EasyDict
 
 from src.sox_degradation import SoxEffectGenerator
 
 class DegradationDataset(torch.utils.data.Dataset):
-    def __init__(self, clean_audio_dir, sox_effects_config, config_path='config.yaml'):
+    def __init__(self, clean_audio_dir, sox_effects_config, cfg: EasyDict):
         super().__init__()
 
         print("Initializing dataset...")
@@ -18,8 +17,7 @@ class DegradationDataset(torch.utils.data.Dataset):
             raise FileNotFoundError(f"No .wav files found in {clean_audio_dir}")
 
         # Load audio processing config
-        with open(config_path) as f:
-            self.cfg = EasyDict(yaml.safe_load(f))
+        self.cfg = cfg
 
         # Setup Sox Effect Generator
         self.sox_generator = SoxEffectGenerator(sox_effects_config)

@@ -80,7 +80,8 @@ def main(args):
     logging.info("Initializing dataset...")
     dataset = DegradationDataset(
         clean_audio_dir=DATASET_DIR,
-        sox_effects_config=EFFECTS_CONFIG
+        sox_effects_config=EFFECTS_CONFIG,
+        cfg=cfg
     )
     # We set num_workers=0 because our on-the-fly generation is CPU-bound and can cause
     # bottlenecks with multiprocessing. For I/O-bound tasks, >0 is better.
