@@ -3,3 +3,5 @@ src/__pycache__
 venv
 slurm
 sox-14.4.2
+wandb
+src/pann_pytorch/__pycache__

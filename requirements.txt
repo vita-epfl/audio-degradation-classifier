@@ -13,3 +13,4 @@ fire
 dl-cliche
 soundfile
 wandb
+torchlibrosa

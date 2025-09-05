@@ -1,6 +1,68 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from src.pann_pytorch.models import Cnn14
+
+class PANNsWithHead(nn.Module):
+    def __init__(self, output_size):
+        super().__init__()
+        # Load the pre-trained PANNs model from the local source.
+        # The model requires specific parameters for initialization.
+        base_model = Cnn14(sample_rate=32000, window_size=1024, hop_size=320, mel_bins=64, fmin=50, fmax=14000, classes_num=527)
+
+        # Manually load the pre-trained checkpoint.
+        # This assumes the checkpoint is available in a known path.
+        # We will need to download it if it's not present.
+        checkpoint_path = "/home/alefevre/panns_data/Cnn14_mAP=0.431.pth"
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        base_model.load_state_dict(checkpoint['model'])
+
+
+        # The feature extractor of the Cnn14 model consists of a batch normalization
+        # layer and a series of convolutional blocks. We'll combine them into a
+        # sequential module.
+        self.features = nn.Sequential(
+            base_model.bn0,
+            base_model.conv_block1,
+            base_model.conv_block2,
+            base_model.conv_block3,
+            base_model.conv_block4,
+            base_model.conv_block5,
+            base_model.conv_block6
+        )
+
+        # We'll replace the final classifier with our own head.
+        # The original model has a head for AudioSet tagging (527 classes).
+        # We need a head that outputs our required `output_size`.
+        self.fc_head = nn.Linear(2048, output_size)
+
+    def forward(self, x, mixup_lambda=None):
+        """
+        The input x is a spectrogram of shape (batch_size, 1, n_mels, time_steps).
+        We need to process it through the PANNs feature extractor and then our custom head.
+        """
+        # Transpose to (batch_size, 1, time_steps, n_mels) and apply batch norm
+        x = x.transpose(2, 3)
+        x = self.features[0](x) # bn0
+        x = x.transpose(2, 3)
+
+        # Convolutional blocks
+        x = self.features[1](x, pool_size=(2, 2), pool_type='avg')
+        x = self.features[2](x, pool_size=(2, 2), pool_type='avg')
+        x = self.features[3](x, pool_size=(2, 2), pool_type='avg')
+        x = self.features[4](x, pool_size=(2, 2), pool_type='avg')
+        x = self.features[5](x, pool_size=(2, 2), pool_type='avg')
+        x = self.features[6](x, pool_size=(1, 1), pool_type='avg')
+
+        x = torch.mean(x, dim=3)
+        (x1, _) = torch.max(x, dim=2)
+        x2 = torch.mean(x, dim=2)
+        x = x1 + x2
+
+        # Pass through our custom head
+        output = self.fc_head(x)
+        return output
+
 
 class SoxDegradationClassifier(nn.Module):
     """

@@ -13,7 +13,7 @@ import wandb
 import os
 
 from src.dataset import DegradationDataset
-from src.model import SoxDegradationClassifier
+from src.model import PANNsWithHead
 
 # --- Setup --- 
 warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
@@ -30,11 +30,12 @@ DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
-    def __init__(self, dataset):
+    def __init__(self, dataset, reg_loss_weight=1.0):
         super().__init__()
         self.dataset = dataset
         self.classification_loss = nn.CrossEntropyLoss()
         self.regression_loss = nn.MSELoss()
+        self.reg_loss_weight = reg_loss_weight
 
     def forward(self, y_pred, y_true):
         # Reshape predictions and labels to (batch, max_effects, item_size)
@@ -64,7 +65,7 @@ class CombinedLoss(nn.Module):
             loss_reg = torch.tensor(0.0, device=y_pred.device)
 
         # Combine losses (we can tune the weights)
-        total_loss = loss_cls + loss_reg
+        total_loss = loss_cls + self.reg_loss_weight * loss_reg
         return total_loss, loss_cls, loss_reg
 
 # --- Main Training Logic ---
@@ -88,9 +89,11 @@ def main():
     logging.info("Initializing model...")
     _, sample_label = dataset[0]
     # The Maestro dataset is stereo, so we have 2 input channels.
-    model = SoxDegradationClassifier(n_channels=2, output_size=sample_label.shape[0])
+    # However, PANNs models expect single-channel (mono) audio.
+    # We will average the channels in the spectrogram generation step.
+    model = PANNsWithHead(output_size=sample_label.shape[0])
 
-    criterion = CombinedLoss(dataset)
+    criterion = CombinedLoss(dataset, reg_loss_weight=cfg.training.reg_loss_weight)
     optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -98,6 +101,7 @@ def main():
     logging.info(f"Using device: {device}")
     if device.type == 'cuda':
         logging.info(f"GPU Name: {torch.cuda.get_device_name(0)}")
+
 
     # --- Spectrogram Transform (on GPU) ---
 
@@ -124,10 +128,12 @@ def main():
             waveforms, labels = waveforms.to(device), labels.to(device)
 
             # Generate spectrograms on the GPU
-            spectrograms = amplitude_to_db(mel_spectrogram(waveforms))
+            # PANNs expect mono, so we average the channels.
+            mono_waveforms = torch.mean(waveforms, dim=1, keepdim=True)
+            spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
 
             optimizer.zero_grad()
-            outputs = model(spectrograms)
+            outputs = model(spectrograms, None) # mixup_lambda is None
             loss, loss_c, loss_r = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
