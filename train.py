@@ -11,6 +11,7 @@ from easydict import EasyDict
 import torchaudio.transforms as T
 import wandb
 import os
+import argparse
 
 from src.dataset import DegradationDataset
 from src.model import PANNsWithHead
@@ -19,14 +20,6 @@ from src.model import PANNsWithHead
 warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Configuration ---
-with open('config.yaml', 'r') as f:
-    cfg = EasyDict(yaml.safe_load(f))
-
-with open('effects_config.yaml', 'r') as f:
-    EFFECTS_CONFIG = yaml.safe_load(f)
-
-DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
@@ -69,8 +62,16 @@ class CombinedLoss(nn.Module):
         return total_loss, loss_cls, loss_reg
 
 # --- Main Training Logic ---
-def main():
+def main(args):
     """Main training loop."""
+    # --- Configuration ---
+    with open(args.config, 'r') as f:
+        cfg = EasyDict(yaml.safe_load(f))
+    with open(args.effects_config, 'r') as f:
+        EFFECTS_CONFIG = yaml.safe_load(f)
+
+    DATASET_DIR = Path(cfg.dataset_dir)
+
     # --- W&B Initialization ---
     project_name = os.environ.get("PROJECT_NAME", "audio-degradation-classifier")
     wandb.init(project=project_name, config=cfg)
@@ -165,4 +166,11 @@ def main():
     logging.info(f'Model saved to {model_path}')
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Train a model to classify audio degradations.')
+    parser.add_argument('--config', type=str, default='config_workstation.yaml', 
+                        help='Path to the configuration file.')
+    parser.add_argument('--effects-config', type=str, default='effects_config.yaml', 
+                        help='Path to the effects configuration file.')
+    
+    args = parser.parse_args()
+    main(args)

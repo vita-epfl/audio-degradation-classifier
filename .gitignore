@@ -5,3 +5,5 @@ slurm
 sox-14.4.2
 wandb
 src/pann_pytorch/__pycache__
+checkpoints/
+checkpoints/model.pth

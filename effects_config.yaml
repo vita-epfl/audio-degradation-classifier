@@ -7,5 +7,5 @@ reverb:
   hf_damping: [10, 100]
   room_scale: [20, 100]
 overdrive:
-  gain: [0, 20]
-  colour: [0, 20]
+  gain: [10, 20]
+  colour: [10, 20]

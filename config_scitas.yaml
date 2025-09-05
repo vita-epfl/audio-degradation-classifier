@@ -1,0 +1,19 @@
+# basic setting parameters
+clip_length: 5.0 # [sec]
+
+# training parameters
+training:
+  batch_size: 128
+  learning_rate: 1.0e-4
+  num_epochs: 10
+  reg_loss_weight: 1.0
+
+# preprocessing parameters
+sample_rate: 32000
+hop_length: 320
+n_fft: 1024
+n_mels: 64
+f_min: 50
+f_max: 14000
+
+dataset_dir: /work/vita/datasets/maestro-v3.0.0/maestro_full_train

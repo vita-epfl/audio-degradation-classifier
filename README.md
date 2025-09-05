@@ -119,3 +119,9 @@ python generate_degraded.py \
   --effects-config effects_config.yaml \
   --seed 1337
 ```
+
+## Start training
+
+```bash
+python train.py --config config_workstation.yaml --effects-config effects_config.yaml
+```
