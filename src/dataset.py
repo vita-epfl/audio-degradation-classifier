@@ -62,8 +62,8 @@ class DegradationDataset(torch.utils.data.Dataset):
             waveform = self.resampler(waveform)
             sr = self.cfg.sample_rate
 
-        # Take a random 2-second clip
-        clip_samples = int(2.0 * sr)
+        # Take a random clip
+        clip_samples = int(self.cfg.clip_length * sr)
         if waveform.shape[1] > clip_samples:
             start = random.randint(0, waveform.shape[1] - clip_samples)
             waveform = waveform[:, start:start + clip_samples]

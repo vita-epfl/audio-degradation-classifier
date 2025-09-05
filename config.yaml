@@ -1,6 +1,12 @@
 # basic setting parameters
 clip_length: 5.0 # [sec]
 
+# training parameters
+training:
+  batch_size: 128
+  learning_rate: 1.0e-4
+  num_epochs: 10
+
 # preprocessing parameters
 sample_rate: 44100
 hop_length: 441

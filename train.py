@@ -18,13 +18,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Configuration ---
-DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
-BATCH_SIZE = 128
-LEARNING_RATE = 1e-4
-NUM_EPOCHS = 1
+with open('config.yaml', 'r') as f:
+    cfg = EasyDict(yaml.safe_load(f))
 
 with open('effects_config.yaml', 'r') as f:
     EFFECTS_CONFIG = yaml.safe_load(f)
+
+DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
@@ -76,7 +76,7 @@ def main():
     )
     # We set num_workers=0 because our on-the-fly generation is CPU-bound and can cause
     # bottlenecks with multiprocessing. For I/O-bound tasks, >0 is better.
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=cfg.training.batch_size, shuffle=True, num_workers=0)
 
     # --- Model, Loss, Optimizer ---
     logging.info("Initializing model...")
@@ -85,7 +85,7 @@ def main():
     model = SoxDegradationClassifier(n_channels=2, output_size=sample_label.shape[0])
 
     criterion = CombinedLoss(dataset)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -94,8 +94,6 @@ def main():
         logging.info(f"GPU Name: {torch.cuda.get_device_name(0)}")
 
     # --- Spectrogram Transform (on GPU) ---
-    with open('config.yaml', 'r') as f:
-        cfg = EasyDict(yaml.safe_load(f))
 
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=cfg.sample_rate,
@@ -110,11 +108,11 @@ def main():
 
     # --- Training Loop ---
     logging.info("Starting training...")
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(cfg.training.num_epochs):
         model.train()
         running_loss = 0.0
         
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}")
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{cfg.training.num_epochs}")
 
         for i, (waveforms, labels) in enumerate(progress_bar):
             waveforms, labels = waveforms.to(device), labels.to(device)
