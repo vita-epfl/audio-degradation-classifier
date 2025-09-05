@@ -7,6 +7,8 @@ import torchaudio
 import torchaudio.transforms as T
 import yaml
 from easydict import EasyDict
+from tqdm import tqdm
+import warnings
 
 from src.sox_degradation import SoxEffectGenerator
 
@@ -84,6 +86,25 @@ def main():
     args = parser.parse_args()
 
     random.seed(args.seed)
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, message=".*torchaudio.io._streaming_media_decoder.StreamingMediaDecoder has been deprecated.*"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, message=".*In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec.*"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, message=".*In 2.9, this function's implementation will be changed to use torchaudio.save_with_torchcodec.*"
+    )
+    # Additional filters for remaining ffmpeg decoder warning text and module-level suppression
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, message=".*torio.io._streaming_media_decoder.StreamingMediaDecoder has been deprecated.*"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, module=r"torchaudio\._backend\.ffmpeg"
+    )
+    warnings.filterwarnings(
+        "ignore", category=UserWarning, message=".*torio.io._streaming_media_encoder.StreamingMediaEncoder has been deprecated.*"
+    )
 
     clean_dir = Path(args.clean_dir)
     out_dir = Path(args.out_dir)
@@ -97,14 +118,14 @@ def main():
     if not wav_files:
         raise FileNotFoundError(f"No .wav files found in {clean_dir}")
 
-    print(f"Found {len(wav_files)} wav files. Generating {args.num_files} degraded clips into {out_dir}...")
+    print(f"Found {len(wav_files)} wav files.")
 
-    for i in range(args.num_files):
+    for i in tqdm(range(args.num_files), desc=f"Generating {args.num_files} degraded clips into {out_dir}"):
         src = random.choice(wav_files)
         try:
             process_file(src, out_dir, cfg, sox_gen, i)
         except Exception as e:
-            print(f"Failed on {src}: {e}")
+            tqdm.write(f"Failed on {src}: {e}")
 
     print("Done.")
 

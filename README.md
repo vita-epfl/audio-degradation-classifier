@@ -112,7 +112,7 @@ sox --version
 
 ```bash
 python generate_degraded.py \
-  --clean-dir /work/vita/datasets/maestro-v3.0.0/maestro_full_valid \
+  --clean-dir /home/alefevre/datasets/maestro-v3.0.0/maestro_full_valid/ \
   --out-dir work/degraded_valid \
   --num-files 5 \
   --config config.yaml \
