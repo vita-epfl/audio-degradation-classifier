@@ -74,7 +74,7 @@ def main(args):
 
     # --- W&B Initialization ---
     project_name = os.environ.get("PROJECT_NAME", "audio-degradation-classifier")
-    wandb.init(project=project_name, config=cfg, mode="offline")
+    wandb.init(project=project_name, config=cfg)
 
     # --- Data Loading ---
     logging.info("Initializing dataset...")
@@ -131,8 +131,10 @@ def main(args):
 
             # Generate spectrograms on the GPU
             # PANNs expect mono, so we average the channels.
-            mono_waveforms = torch.mean(waveforms, dim=1, keepdim=True)
+            mono_waveforms = torch.mean(waveforms, dim=1)
             spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
+            # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
+            spectrograms = spectrograms.unsqueeze(1)
 
             optimizer.zero_grad()
             outputs = model(spectrograms, None) # mixup_lambda is None

@@ -68,9 +68,9 @@ class PANNsWithHead(nn.Module):
         We need to process it through the PANNs feature extractor and then our custom head.
         """
         # Transpose to (batch_size, 1, time_steps, n_mels) and apply batch norm
-        x = x.transpose(2, 3)
+        x = x.transpose(1, 2)
         x = self.features[0](x) # bn0
-        x = x.transpose(2, 3)
+        x = x.transpose(1, 2)
 
         # Convolutional blocks
         x = self.features[1](x, pool_size=(2, 2), pool_type='avg')
