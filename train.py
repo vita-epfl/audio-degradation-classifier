@@ -74,7 +74,7 @@ def main(args):
 
     # --- W&B Initialization ---
     project_name = os.environ.get("PROJECT_NAME", "audio-degradation-classifier")
-    wandb.init(project=project_name, config=cfg)
+    wandb.init(project=project_name, config=cfg, mode="offline")
 
     # --- Data Loading ---
     logging.info("Initializing dataset...")

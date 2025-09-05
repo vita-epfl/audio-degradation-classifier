@@ -14,3 +14,4 @@ dl-cliche
 soundfile
 wandb
 torchlibrosa
+gdown

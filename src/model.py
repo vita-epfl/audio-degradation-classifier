@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.pann_pytorch.models import Cnn14
+import os
+import gdown
+import logging
 
 class PANNsWithHead(nn.Module):
     def __init__(self, output_size):
@@ -10,12 +13,35 @@ class PANNsWithHead(nn.Module):
         # The model requires specific parameters for initialization.
         base_model = Cnn14(sample_rate=32000, window_size=1024, hop_size=320, mel_bins=64, fmin=50, fmax=14000, classes_num=527)
 
-        # Manually load the pre-trained checkpoint.
-        # This assumes the checkpoint is available in a known path.
-        # We will need to download it if it's not present.
-        checkpoint_path = "/home/alefevre/panns_data/Cnn14_mAP=0.431.pth"
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        base_model.load_state_dict(checkpoint['model'])
+        # Define the path for the pre-trained checkpoint.
+        # We'll store it in a local directory to avoid re-downloading.
+        checkpoint_dir = "panns_data"
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_path = os.path.join(checkpoint_dir, "Cnn14_mAP=0.431.pth")
+
+        # URL for the pre-trained model checkpoint.
+        # This is from the official PANNs repository, hosted on Zenodo.
+        checkpoint_url = "https://zenodo.org/record/3987831/files/Cnn14_mAP%3D0.431.pth?download=1"
+
+        # Check if the checkpoint exists and is valid.
+        # If not, download it.
+        if not os.path.exists(checkpoint_path):
+            logging.info(f"Checkpoint not found at {checkpoint_path}. Downloading...")
+            gdown.download(checkpoint_url, checkpoint_path, quiet=False)
+            logging.info("Download complete.")
+
+        # Load the checkpoint and handle potential corruption.
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            base_model.load_state_dict(checkpoint['model'])
+        except RuntimeError as e:
+            logging.error(f"Failed to load checkpoint: {e}")
+            logging.info("The checkpoint file might be corrupted. Deleting and re-downloading.")
+            os.remove(checkpoint_path)
+            gdown.download(checkpoint_url, checkpoint_path, quiet=False)
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            base_model.load_state_dict(checkpoint['model'])
+
 
 
         # The feature extractor of the Cnn14 model consists of a batch normalization
