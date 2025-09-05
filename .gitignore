@@ -1,3 +1,5 @@
 work/*
 src/__pycache__
 venv
+slurm
+sox-14.4.2

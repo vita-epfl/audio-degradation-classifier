@@ -18,10 +18,10 @@ warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Configuration ---
-DATASET_DIR = Path('/home/alefevre/datasets/maestro-v3.0.0/maestro_full_train/')
-BATCH_SIZE = 16
+DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
+BATCH_SIZE = 128
 LEARNING_RATE = 1e-4
-NUM_EPOCHS = 10
+NUM_EPOCHS = 1
 
 EFFECTS_CONFIG = {
     'equalizer': {

@@ -11,3 +11,4 @@ pandas
 scikit-learn
 fire
 dl-cliche
+soundfile
