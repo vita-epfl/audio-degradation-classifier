@@ -107,3 +107,15 @@ verify installation:
 ```bash
 sox --version
 ```
+
+## Generate degraded audios
+
+```bash
+python generate_degraded.py \
+  --clean-dir /work/vita/datasets/maestro-v3.0.0/maestro_full_valid \
+  --out-dir work/degraded_valid \
+  --num-files 5 \
+  --config config.yaml \
+  --effects-config effects_config.yaml \
+  --seed 1337
+```

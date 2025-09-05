@@ -1,0 +1,11 @@
+equalizer:
+  frequency: [200, 10000]
+  width_q: [0.1, 10.0]
+  gain: [-35, 35]
+reverb:
+  reverberance: [20, 100]
+  hf_damping: [10, 100]
+  room_scale: [20, 100]
+overdrive:
+  gain: [10, 40]
+  colour: [10, 40]

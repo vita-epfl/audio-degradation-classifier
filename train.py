@@ -23,22 +23,8 @@ BATCH_SIZE = 128
 LEARNING_RATE = 1e-4
 NUM_EPOCHS = 1
 
-EFFECTS_CONFIG = {
-    'equalizer': {
-        'frequency': (200, 10000), # Wider frequency range
-        'width_q': (0.1, 10.0),    # Wider Q range for more extreme filtering
-        'gain': (-35, 35)         # Slightly more gain
-    },
-    'reverb': {
-        'reverberance': (20, 100), # Ensure some reverb is always present
-        'hf_damping': (10, 100),
-        'room_scale': (20, 100)
-    },
-    'overdrive': {
-        'gain': (10, 40),          # Add distortion
-        'colour': (10, 40)
-    }
-}
+with open('effects_config.yaml', 'r') as f:
+    EFFECTS_CONFIG = yaml.safe_load(f)
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
@@ -150,6 +136,14 @@ def main():
             )
 
     logging.info('Finished Training')
+
+    # --- Save Model --- 
+    logging.info('Saving model...')
+    output_dir = Path('work')
+    output_dir.mkdir(exist_ok=True)
+    model_path = output_dir / 'model.pth'
+    torch.save(model.state_dict(), model_path)
+    logging.info(f'Model saved to {model_path}')
 
 if __name__ == '__main__':
     main()
