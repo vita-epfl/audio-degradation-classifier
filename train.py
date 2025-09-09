@@ -118,6 +118,10 @@ def main(args):
 
     amplitude_to_db = T.AmplitudeToDB().to(device)
 
+    # --- Output Directory Setup ---
+    output_dir = Path('work')
+    output_dir.mkdir(exist_ok=True)
+
     # --- Training Loop ---
     logging.info("Starting training...")
     for epoch in range(cfg.training.num_epochs):
@@ -158,12 +162,16 @@ def main(args):
                 'regression_loss': loss_r.item()
             })
 
+        # --- Save Checkpoint ---
+        if (epoch + 1) % cfg.training.get('save_every_n_epoch', 1) == 0:
+            checkpoint_path = output_dir / f'model_epoch_{epoch + 1}.pth'
+            torch.save(model.state_dict(), checkpoint_path)
+            logging.info(f'Checkpoint saved to {checkpoint_path}')
+
     logging.info('Finished Training')
 
-    # --- Save Model --- 
-    logging.info('Saving model...')
-    output_dir = Path('work')
-    output_dir.mkdir(exist_ok=True)
+    # --- Save Final Model --- 
+    logging.info('Saving final model...')
     model_path = output_dir / 'model.pth'
     torch.save(model.state_dict(), model_path)
     logging.info(f'Model saved to {model_path}')
