@@ -9,44 +9,26 @@ from tqdm import tqdm
 import yaml
 from easydict import EasyDict
 import torchaudio.transforms as T
+import wandb
+import os
+import argparse
 
 from src.dataset import DegradationDataset
-from src.model import SoxDegradationClassifier
+from src.model import PANNsWithHead
 
 # --- Setup --- 
 warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Configuration ---
-DATASET_DIR = Path('/work/vita/datasets/maestro-v3.0.0/maestro_full_train')
-BATCH_SIZE = 128
-LEARNING_RATE = 1e-4
-NUM_EPOCHS = 1
-
-EFFECTS_CONFIG = {
-    'equalizer': {
-        'frequency': (200, 10000), # Wider frequency range
-        'width_q': (0.1, 10.0),    # Wider Q range for more extreme filtering
-        'gain': (-35, 35)         # Slightly more gain
-    },
-    'reverb': {
-        'reverberance': (20, 100), # Ensure some reverb is always present
-        'hf_damping': (10, 100),
-        'room_scale': (20, 100)
-    },
-    'overdrive': {
-        'gain': (10, 40),          # Add distortion
-        'colour': (10, 40)
-    }
-}
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
-    def __init__(self, dataset):
+    def __init__(self, dataset, reg_loss_weight=1.0):
         super().__init__()
         self.dataset = dataset
         self.classification_loss = nn.CrossEntropyLoss()
         self.regression_loss = nn.MSELoss()
+        self.reg_loss_weight = reg_loss_weight
 
     def forward(self, y_pred, y_true):
         # Reshape predictions and labels to (batch, max_effects, item_size)
@@ -76,30 +58,45 @@ class CombinedLoss(nn.Module):
             loss_reg = torch.tensor(0.0, device=y_pred.device)
 
         # Combine losses (we can tune the weights)
-        total_loss = loss_cls + loss_reg
+        total_loss = loss_cls + self.reg_loss_weight * loss_reg
         return total_loss, loss_cls, loss_reg
 
 # --- Main Training Logic ---
-def main():
+def main(args):
     """Main training loop."""
+    # --- Configuration ---
+    with open(args.config, 'r') as f:
+        cfg = EasyDict(yaml.safe_load(f))
+    with open(args.effects_config, 'r') as f:
+        EFFECTS_CONFIG = yaml.safe_load(f)
+
+    DATASET_DIR = Path(cfg.dataset_dir)
+
+    # --- W&B Initialization ---
+    project_name = os.environ.get("PROJECT_NAME", "audio-degradation-classifier")
+    wandb.init(project=project_name, config=cfg)
+
     # --- Data Loading ---
     logging.info("Initializing dataset...")
     dataset = DegradationDataset(
         clean_audio_dir=DATASET_DIR,
-        sox_effects_config=EFFECTS_CONFIG
+        sox_effects_config=EFFECTS_CONFIG,
+        cfg=cfg
     )
     # We set num_workers=0 because our on-the-fly generation is CPU-bound and can cause
     # bottlenecks with multiprocessing. For I/O-bound tasks, >0 is better.
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=cfg.training.batch_size, shuffle=True, num_workers=0)
 
     # --- Model, Loss, Optimizer ---
     logging.info("Initializing model...")
     _, sample_label = dataset[0]
     # The Maestro dataset is stereo, so we have 2 input channels.
-    model = SoxDegradationClassifier(n_channels=2, output_size=sample_label.shape[0])
+    # However, PANNs models expect single-channel (mono) audio.
+    # We will average the channels in the spectrogram generation step.
+    model = PANNsWithHead(output_size=sample_label.shape[0])
 
-    criterion = CombinedLoss(dataset)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    criterion = CombinedLoss(dataset, reg_loss_weight=cfg.training.reg_loss_weight)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -107,9 +104,8 @@ def main():
     if device.type == 'cuda':
         logging.info(f"GPU Name: {torch.cuda.get_device_name(0)}")
 
+
     # --- Spectrogram Transform (on GPU) ---
-    with open('config.yaml', 'r') as f:
-        cfg = EasyDict(yaml.safe_load(f))
 
     mel_spectrogram = T.MelSpectrogram(
         sample_rate=cfg.sample_rate,
@@ -124,20 +120,24 @@ def main():
 
     # --- Training Loop ---
     logging.info("Starting training...")
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(cfg.training.num_epochs):
         model.train()
         running_loss = 0.0
         
-        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{NUM_EPOCHS}")
+        progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{cfg.training.num_epochs}")
 
         for i, (waveforms, labels) in enumerate(progress_bar):
             waveforms, labels = waveforms.to(device), labels.to(device)
 
             # Generate spectrograms on the GPU
-            spectrograms = amplitude_to_db(mel_spectrogram(waveforms))
+            # PANNs expect mono, so we average the channels.
+            mono_waveforms = torch.mean(waveforms, dim=1)
+            spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
+            # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
+            spectrograms = spectrograms.unsqueeze(1)
 
             optimizer.zero_grad()
-            outputs = model(spectrograms)
+            outputs = model(spectrograms, None) # mixup_lambda is None
             loss, loss_c, loss_r = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -149,7 +149,31 @@ def main():
                 reg=f'{loss_r.item():.4f}'
             )
 
+            # Log metrics to W&B
+            wandb.log({
+                'epoch': epoch,
+                'step': i,
+                'loss': loss.item(),
+                'classification_loss': loss_c.item(),
+                'regression_loss': loss_r.item()
+            })
+
     logging.info('Finished Training')
 
+    # --- Save Model --- 
+    logging.info('Saving model...')
+    output_dir = Path('work')
+    output_dir.mkdir(exist_ok=True)
+    model_path = output_dir / 'model.pth'
+    torch.save(model.state_dict(), model_path)
+    logging.info(f'Model saved to {model_path}')
+
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Train a model to classify audio degradations.')
+    parser.add_argument('--config', type=str, default='config_workstation.yaml', 
+                        help='Path to the configuration file.')
+    parser.add_argument('--effects-config', type=str, default='effects_config.yaml', 
+                        help='Path to the effects configuration file.')
+    
+    args = parser.parse_args()
+    main(args)

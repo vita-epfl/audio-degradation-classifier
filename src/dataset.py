@@ -3,13 +3,12 @@ import torchaudio
 import numpy as np
 import random
 from pathlib import Path
-import yaml
 from easydict import EasyDict
 
 from src.sox_degradation import SoxEffectGenerator
 
 class DegradationDataset(torch.utils.data.Dataset):
-    def __init__(self, clean_audio_dir, sox_effects_config, config_path='config.yaml'):
+    def __init__(self, clean_audio_dir, sox_effects_config, cfg: EasyDict):
         super().__init__()
 
         print("Initializing dataset...")
@@ -18,8 +17,7 @@ class DegradationDataset(torch.utils.data.Dataset):
             raise FileNotFoundError(f"No .wav files found in {clean_audio_dir}")
 
         # Load audio processing config
-        with open(config_path) as f:
-            self.cfg = EasyDict(yaml.safe_load(f))
+        self.cfg = cfg
 
         # Setup Sox Effect Generator
         self.sox_generator = SoxEffectGenerator(sox_effects_config)
@@ -39,6 +37,7 @@ class DegradationDataset(torch.utils.data.Dataset):
 
         # --- Torchaudio Transforms ---
         self.resampler = None # Will be initialized on demand
+
 
 
         print(f"Found {len(self.clean_audio_files)} clean audio files.")
@@ -62,8 +61,8 @@ class DegradationDataset(torch.utils.data.Dataset):
             waveform = self.resampler(waveform)
             sr = self.cfg.sample_rate
 
-        # Take a random 2-second clip
-        clip_samples = int(2.0 * sr)
+        # Take a random clip
+        clip_samples = int(self.cfg.clip_length * sr)
         if waveform.shape[1] > clip_samples:
             start = random.randint(0, waveform.shape[1] - clip_samples)
             waveform = waveform[:, start:start + clip_samples]

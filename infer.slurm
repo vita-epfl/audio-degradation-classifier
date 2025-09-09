@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=audio-degradation-classifier
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=0
 #SBATCH --time=00:20:00
@@ -31,7 +31,6 @@ export PATH=$HOME/local/sox/bin:$PATH
 export LD_LIBRARY_PATH=$HOME/local/sox/lib:$LD_LIBRARY_PATH
 
 export WANDB_API_KEY=6bc7bb9456313ef80ea74ee7877c4c927de72220
-export PROJECT_NAME="audio-degradation-classifier"
 
 cd /work/vita/alefevre/programs/audio-degradation-classifier
 
@@ -39,6 +38,6 @@ source /work/vita/alefevre/programs/audio-degradation-classifier/venv/bin/activa
 
 echo STARTING AT `date`
 
-srun --gpu-bind=closest /bin/bash -c "python train.py"
+srun --gpu-bind=closest /bin/bash -c "python infer.py --weights work/model.pth --audio-file /path/to/your/audio.wav"
 
 echo FINISHED at `date`
