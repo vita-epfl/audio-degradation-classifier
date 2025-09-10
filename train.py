@@ -9,6 +9,7 @@ from tqdm import tqdm
 import yaml
 from easydict import EasyDict
 import torchaudio.transforms as T
+import torchaudio.load as load
 import wandb
 import os
 import argparse
@@ -76,11 +77,11 @@ def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram
 
     # 1. Load a fixed clean audio file for consistency
     clean_file_path = dataset.clean_audio_files[0] 
-    clean_waveform, sample_rate = torchaudio.load(clean_file_path)
+    clean_waveform, sample_rate = load(clean_file_path)
 
     # Resample and select clip just like in the dataset
     if sample_rate != cfg.sample_rate:
-        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=cfg.sample_rate)
+        resampler = T.Resample(orig_freq=sample_rate, new_freq=cfg.sample_rate)
         clean_waveform = resampler(clean_waveform)
         sample_rate = cfg.sample_rate
 
