@@ -16,6 +16,7 @@ training:
   reg_loss_weight: 1.0
   save_every_n_epoch: 10
   output_dir: 'output_checkpoints'
+  sample_every: 10
 
 # preprocessing parameters
 sample_rate: 32000

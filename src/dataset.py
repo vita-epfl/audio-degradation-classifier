@@ -121,3 +121,40 @@ class DegradationDataset(torch.utils.data.Dataset):
                 label[i, param_offset + j] = normalized_param
 
         return label.flatten()  # Flatten for use in the model
+
+    def decode_label(self, label_tensor):
+        """
+        Decodes a label tensor back into a list of sox effect strings.
+        """
+        if label_tensor.ndim == 1:
+            label_tensor = label_tensor.view(self.max_effects, self.label_item_size)
+
+        effect_chain = []
+        for i in range(self.max_effects):
+            effect_slot = label_tensor[i]
+            class_probs = effect_slot[:self.num_effect_types]
+            
+            # Find the predicted effect type
+            effect_idx = torch.argmax(class_probs).item()
+            effect_name = list(self.effect_map.keys())[list(self.effect_map.values()).index(effect_idx)]
+
+            # Check if it's a real effect (not padding)
+            if effect_slot.sum() == 0: # Simple check for padding
+                continue
+
+            # Denormalize parameters
+            param_config = self.sox_generator.effects_config[effect_name]
+            param_keys = list(param_config.keys())
+            param_offset = self.num_effect_types
+            
+            effect_parts = [effect_name]
+            for j in range(len(param_keys)):
+                param_name = param_keys[j]
+                normalized_param = effect_slot[param_offset + j].item()
+                min_val, max_val = param_config[param_name]
+                denormalized_param = normalized_param * (max_val - min_val) + min_val
+                effect_parts.append(str(round(denormalized_param, 3)))
+
+            effect_chain.append(" ".join(effect_parts))
+
+        return effect_chain

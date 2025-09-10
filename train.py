@@ -12,6 +12,8 @@ import torchaudio.transforms as T
 import wandb
 import os
 import argparse
+import random
+import numpy as np
 from datetime import datetime
 
 from src.dataset import DegradationDataset
@@ -61,6 +63,57 @@ class CombinedLoss(nn.Module):
         # Combine losses (we can tune the weights)
         total_loss = loss_cls + self.reg_loss_weight * loss_reg
         return total_loss, loss_cls, loss_reg
+
+def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram, amplitude_to_db):
+    logging.info(f"Generating audio sample for epoch {epoch}...")
+    model.eval()  # Set model to evaluation mode
+
+    # --- Deterministic Setup ---
+    # Use epoch number as seed to get the same degradation for the same epoch number
+    seed = epoch 
+    random.seed(seed)
+    np.random.seed(seed)
+
+    # 1. Load a fixed clean audio file for consistency
+    clean_file_path = dataset.clean_audio_files[0] 
+    clean_waveform, sample_rate = torchaudio.load(clean_file_path)
+
+    # Resample and select clip just like in the dataset
+    if sample_rate != cfg.sample_rate:
+        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=cfg.sample_rate)
+        clean_waveform = resampler(clean_waveform)
+        sample_rate = cfg.sample_rate
+
+    clip_samples = int(cfg.clip_length * sample_rate)
+    if clean_waveform.shape[1] > clip_samples:
+        # Use a fixed start point for reproducibility
+        start = (clean_waveform.shape[1] - clip_samples) // 2 
+        clean_waveform = clean_waveform[:, start:start + clip_samples]
+
+    # 2. Generate ground truth degradation
+    true_effect_chain = dataset.sox_generator.generate(num_effects_range=(1, 3))
+    true_degraded_audio = dataset.sox_generator.apply_effects(clean_waveform, sample_rate, true_effect_chain)
+
+    # 3. Get model's prediction
+    with torch.no_grad():
+        # Prepare input for model
+        mono_waveform = torch.mean(true_degraded_audio, dim=0).unsqueeze(0).to(device)
+        spectrogram = amplitude_to_db(mel_spectrogram(mono_waveform))
+        spectrogram = spectrogram.unsqueeze(1) # Add channel dim
+
+        predicted_label = model(spectrogram, None)
+
+    # 4. Decode prediction
+    predicted_effect_chain = dataset.decode_label(predicted_label.squeeze(0).cpu())
+
+    # 5. Log degradations to W&B as text
+    wandb.log({
+        f"degradations/epoch_{epoch}/ground_truth": " | ".join(true_effect_chain),
+        f"degradations/epoch_{epoch}/predicted": " | ".join(predicted_effect_chain)
+    })
+
+    logging.info("Degradations logged to W&B.")
+    model.train() # Set model back to training mode
 
 # --- Main Training Logic ---
 def main(args):
@@ -164,6 +217,11 @@ def main(args):
                 'classification_loss': loss_c.item(),
                 'regression_loss': loss_r.item()
             })
+
+        # --- Save Checkpoint ---
+        # --- Sample Generation ---
+        if (epoch + 1) % cfg.training.get('sample_every', 10) == 0:
+            generate_and_log_samples(model, dataset, epoch + 1, device, cfg, mel_spectrogram, amplitude_to_db)
 
         # --- Save Checkpoint ---
         if (epoch + 1) % cfg.training.get('save_every_n_epoch', 1) == 0:
