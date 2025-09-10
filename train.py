@@ -15,7 +15,7 @@ import argparse
 from datetime import datetime
 
 from src.dataset import DegradationDataset
-from src.model import PANNsWithHead
+from src.model import get_model
 
 # --- Setup --- 
 warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
@@ -94,7 +94,7 @@ def main(args):
     # The Maestro dataset is stereo, so we have 2 input channels.
     # However, PANNs models expect single-channel (mono) audio.
     # We will average the channels in the spectrogram generation step.
-    model = PANNsWithHead(output_size=sample_label.shape[0])
+    model = get_model(cfg, output_size=sample_label.shape[0])
 
     criterion = CombinedLoss(dataset, reg_loss_weight=cfg.training.reg_loss_weight)
     optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate)

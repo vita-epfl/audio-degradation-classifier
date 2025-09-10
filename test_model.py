@@ -1,54 +1,67 @@
 from pathlib import Path
+import yaml
+from easydict import EasyDict
+import torch
+import torchaudio.transforms as T
+
 from src.dataset import DegradationDataset
-from src.model import SoxDegradationClassifier
+from src.model import get_model
 
 # --- Configuration ---
-DATASET_DIR = Path('/home/alefevre/datasets/maestro-v3.0.0/maestro_full_train/')
-
-EFFECTS_CONFIG = {
-    'equalizer': {
-        'frequency': (300, 8000),
-        'width_q': (0.5, 2.0),
-        'gain': (-30, 30)
-    },
-    'reverb': {
-        'reverberance': (0, 100),
-        'hf_damping': (0, 100),
-        'room_scale': (0, 100)
-    }
-}
+CONFIG_PATH = 'config_scitas.yaml'
+EFFECTS_CONFIG_PATH = 'effects_config.yaml'
 
 # --- Main Test Logic ---
 def main():
-    """Tests the SoxDegradationClassifier model."""
-    print("--- Testing SoxDegradationClassifier ---")
+    """Tests the model specified in the config file."""
+    print(f"--- Testing Model from {CONFIG_PATH} ---")
 
-    # 1. Initialize the dataset to get shapes
+    # 1. Load configurations
+    with open(CONFIG_PATH, 'r') as f:
+        cfg = EasyDict(yaml.safe_load(f))
+    with open(EFFECTS_CONFIG_PATH, 'r') as f:
+        effects_config = yaml.safe_load(f)
+
+    # 2. Initialize the dataset to get shapes
     dataset = DegradationDataset(
-        clean_audio_dir=DATASET_DIR,
-        sox_effects_config=EFFECTS_CONFIG
+        clean_audio_dir=Path(cfg.dataset_dir),
+        sox_effects_config=effects_config,
+        cfg=cfg
     )
 
-    # 2. Get a sample to determine input/output sizes
+    # 3. Get a sample to determine input/output sizes
     print("\nFetching a sample for shape inference...")
-    spectrogram, label = dataset[0]
-    input_shape = spectrogram.shape
+    waveform, label = dataset[0]
     output_size = label.shape[0]
 
-    print(f"Input shape (spectrogram): {input_shape}")
+    print(f"Input shape (waveform): {waveform.shape}")
     print(f"Output size (label): {output_size}")
 
-    # 3. Initialize the model
+    # 4. Initialize the model
     print("\nInitializing the model...")
-    n_channels = input_shape[0]
-    model = SoxDegradationClassifier(n_channels=n_channels, output_size=output_size)
+    model = get_model(cfg, output_size)
 
-    # 4. Perform a forward pass
+    # 5. Create spectrogram transforms
+    mel_spectrogram = T.MelSpectrogram(
+        sample_rate=cfg.sample_rate,
+        n_fft=cfg.n_fft,
+        hop_length=cfg.hop_length,
+        n_mels=cfg.n_mels,
+        f_min=cfg.f_min,
+        f_max=cfg.f_max
+    )
+    amplitude_to_db = T.AmplitudeToDB()
+
+    # 6. Perform a forward pass
     print("Performing a forward pass...")
+    # Convert to mono and generate spectrogram
+    mono_waveform = torch.mean(waveform, dim=0, keepdim=True)
+    spectrogram = amplitude_to_db(mel_spectrogram(mono_waveform))
+    
     # Add a batch dimension to the spectrogram
     output = model(spectrogram.unsqueeze(0))
 
-    # 5. Check the output shape
+    # 7. Check the output shape
     print(f"\nModel output shape: {output.shape}")
     print(f"Expected output shape: (1, {output_size})")
     assert output.shape == (1, output_size), "Model output shape is incorrect!"
