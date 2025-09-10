@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=audio-degradation-classifier
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=0
-#SBATCH --time=00:20:00
+#SBATCH --time=10:00:00
 #SBATCH --partition=h100
 #SBATCH --output=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.out
 #SBATCH --error=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.err
@@ -39,6 +39,6 @@ source /work/vita/alefevre/programs/audio-degradation-classifier/venv/bin/activa
 
 echo STARTING AT `date`
 
-srun --gpu-bind=closest /bin/bash -c "python train.py"
+srun --gpu-bind=closest /bin/bash -c "python train.py --config config_scitas.yaml --effects-config effects_config.yaml"
 
 echo FINISHED at `date`

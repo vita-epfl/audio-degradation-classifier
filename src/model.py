@@ -140,3 +140,44 @@ class SoxDegradationClassifier(nn.Module):
         x = self.fc3(x) # No activation on the final layer
 
         return x
+
+
+class AudioTransformer(nn.Module):
+    def __init__(self, n_mels, d_model, nhead, num_layers, output_size):
+        super().__init__()
+        self.conv_in = nn.Conv2d(1, d_model, kernel_size=(n_mels, 1))
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, batch_first=True),
+            num_layers=num_layers
+        )
+        self.fc_out = nn.Linear(d_model, output_size)
+
+    def forward(self, x, mixup_lambda=None):
+        # x shape: (batch, 1, n_mels, time_steps)
+        x = self.conv_in(x).squeeze(2) # (batch, d_model, time_steps)
+        x = x.permute(0, 2, 1) # (batch, time_steps, d_model)
+        x = self.transformer_encoder(x)
+        x = x.mean(dim=1) # Average pooling over time
+        return self.fc_out(x)
+
+def get_model(cfg, output_size):
+    """Factory function to create a model based on the config."""
+    model_name = cfg.model.name
+    if model_name == 'panns_with_head':
+        logging.info("Using PANNsWithHead model")
+        return PANNsWithHead(output_size=output_size)
+    elif model_name == 'sox_degradation_classifier':
+        logging.info("Using SoxDegradationClassifier model")
+        # n_channels is 1 because we are using mono spectrograms
+        return SoxDegradationClassifier(n_channels=1, output_size=output_size)
+    elif model_name == 'audio_transformer':
+        logging.info("Using AudioTransformer model")
+        return AudioTransformer(
+            n_mels=cfg.n_mels,
+            d_model=cfg.model.d_model,
+            nhead=cfg.model.nhead,
+            num_layers=cfg.model.num_layers,
+            output_size=output_size
+        )
+    else:
+        raise ValueError(f"Unknown model name: {model_name}")
