@@ -12,6 +12,7 @@ import torchaudio.transforms as T
 import wandb
 import os
 import argparse
+from datetime import datetime
 
 from src.dataset import DegradationDataset
 from src.model import PANNsWithHead
@@ -119,8 +120,10 @@ def main(args):
     amplitude_to_db = T.AmplitudeToDB().to(device)
 
     # --- Output Directory Setup ---
-    output_dir = Path('work')
-    output_dir.mkdir(exist_ok=True)
+    date_str = datetime.now().strftime('%Y%m%d')
+    folder_name = f"{cfg.model.name}_{cfg.training.num_epochs}epochs_{date_str}"
+    output_dir = Path(cfg.training.output_dir) / folder_name
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Training Loop ---
     logging.info("Starting training...")
