@@ -8,3 +8,4 @@ src/pann_pytorch/__pycache__
 checkpoints/
 checkpoints/model.pth
 panns_data/
+output_checkpoints/
