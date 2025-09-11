@@ -27,11 +27,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
-    def __init__(self, dataset, reg_loss_weight=1.0):
+    def __init__(self, dataset, reg_loss_weight=1.0, label_smoothing=0.05, param_loss_type='mse'):
         super().__init__()
         self.dataset = dataset
-        self.classification_loss = nn.CrossEntropyLoss()
-        self.regression_loss = nn.MSELoss()
+        self.classification_loss = nn.CrossEntropyLoss(reduction='none', label_smoothing=label_smoothing)
+        if param_loss_type == 'mse':
+            self.regression_loss = nn.MSELoss(reduction='none')
+        elif param_loss_type == 'smooth_l1':
+            self.regression_loss = nn.SmoothL1Loss(reduction='none')
+        else:
+            raise ValueError(f"Unknown param_loss_type: {param_loss_type}")
         self.reg_loss_weight = reg_loss_weight
 
     def forward(self, y_pred, y_true):
@@ -51,17 +56,26 @@ class CombinedLoss(nn.Module):
 
         # Calculate classification loss
         # We need to reshape for CrossEntropyLoss: (N, C, ...)
-        loss_cls = self.classification_loss(pred_logits.permute(0, 2, 1), true_classes)
+        cls_loss_per_slot = self.classification_loss(pred_logits.permute(0, 2, 1), true_classes)  # shape (batch, max_effects)
+
+        # Create a mask for active effects
+        mask = y_true[:, :, :num_types].sum(dim=-1) > 0  # shape (batch, max_effects)
+
+        # Apply mask to classification loss
+        if mask.any():
+            loss_cls = (cls_loss_per_slot * mask).sum() / mask.sum()
+        else:
+            loss_cls = torch.tensor(0.0, device=y_pred.device)
 
         # Calculate regression loss only for active effects
-        # Create a mask for active effects
-        mask = y_true[:, :, :num_types].sum(dim=-1) > 0
+        # Apply mask to regression loss
         if mask.any():
-            loss_reg = self.regression_loss(pred_params[mask], true_params[mask])
+            loss_reg = self.regression_loss(pred_params, true_params)  # shape (batch, max_effects, max_params)
+            loss_reg = (loss_reg * mask.unsqueeze(-1)).sum() / (mask.sum() * self.dataset.max_params)
         else:
             loss_reg = torch.tensor(0.0, device=y_pred.device)
 
-        # Combine losses (we can tune the weights)
+        # Combine losses
         total_loss = loss_cls + self.reg_loss_weight * loss_reg
         return total_loss, loss_cls, loss_reg
 
