@@ -8,8 +8,8 @@ import warnings
 from tqdm import tqdm
 import yaml
 from easydict import EasyDict
+import torchaudio
 import torchaudio.transforms as T
-import torchaudio.load as load
 import wandb
 import os
 import argparse
@@ -77,7 +77,7 @@ def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram
 
     # 1. Load a fixed clean audio file for consistency
     clean_file_path = dataset.clean_audio_files[0] 
-    clean_waveform, sample_rate = load(clean_file_path)
+    clean_waveform, sample_rate = torchaudio.load(clean_file_path)
 
     # Resample and select clip just like in the dataset
     if sample_rate != cfg.sample_rate:
@@ -107,10 +107,21 @@ def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram
     # 4. Decode prediction
     predicted_effect_chain = dataset.decode_label(predicted_label.squeeze(0).cpu())
 
-    # 5. Log degradations to W&B as text
+    # 5. Log degradations to W&B as text in a comparison table
+    html_table = f"""
+    <table style="border: 1px solid black; border-collapse: collapse;">
+        <tr>
+            <th style="border: 1px solid black; padding: 8px;">Ground Truth</th>
+            <td style="border: 1px solid black; padding: 8px;">{' | '.join(true_effect_chain)}</td>
+        </tr>
+        <tr>
+            <th style="border: 1px solid black; padding: 8px;">Predicted</th>
+            <td style="border: 1px solid black; padding: 8px;">{' | '.join(predicted_effect_chain)}</td>
+        </tr>
+    </table>
+    """
     wandb.log({
-        f"degradations/epoch_{epoch}/ground_truth": " | ".join(true_effect_chain),
-        f"degradations/epoch_{epoch}/predicted": " | ".join(predicted_effect_chain)
+        f"epoch_{epoch}_comparison": wandb.Html(html_table)
     })
 
     logging.info("Degradations logged to W&B.")
