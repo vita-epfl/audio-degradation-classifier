@@ -146,11 +146,12 @@ class DegradationDataset(torch.utils.data.Dataset):
             
             # Find the predicted effect type
             effect_idx = torch.argmax(class_probs).item()
-            effect_name = self.effect_map_inv[effect_idx]
 
             # Skip if it's 'no_effect'
-            if effect_name == 'no_effect':
+            if effect_idx == no_effect_idx:
                 continue
+
+            effect_name = self.effect_map_inv[effect_idx]
 
             # Denormalize parameters
             param_config = self.sox_generator.effects_config[effect_name]
