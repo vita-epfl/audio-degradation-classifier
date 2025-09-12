@@ -321,7 +321,7 @@ def main(args):
 
                 # Apply Mixup augmentation
                 mixup_lambda = torch.rand(1, device=device).item()  # Random lambda between 0 and 1
-                if mixup_lambda > 0.5:  # Apply mixup with 50% probability, or you can adjust this
+                if mixup_lambda > cfg.training.mixup_prob:  # Apply mixup with 50% probability, or you can adjust this
                     spectrograms, labels = apply_mixup(
                         spectrograms, labels, mixup_lambda, 
                         max_effects=dataset.max_effects,
