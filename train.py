@@ -231,6 +231,10 @@ def main(args):
 
     amplitude_to_db = T.AmplitudeToDB().to(device)
 
+    # --- SpecAugment for data augmentation ---
+    freq_masking = T.FrequencyMasking(freq_mask_param=2).to(device)  # Mask 2 frequency bins
+    time_masking = T.TimeMasking(time_mask_param=10).to(device)     # Mask 10 time steps
+
     # --- Output Directory Setup ---
     date_str = datetime.now().strftime('%Y%m%d')
     folder_name = f"{cfg.model.name}_{cfg.training.num_epochs}epochs_{date_str}"
@@ -254,6 +258,9 @@ def main(args):
             spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
             # Normalize spectrogram per sample
             spectrograms = normalize_spectrogram(spectrograms)
+            # Apply SpecAugment data augmentation during training
+            spectrograms = freq_masking(spectrograms)
+            spectrograms = time_masking(spectrograms)
             # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
             spectrograms = spectrograms.unsqueeze(1)
 
