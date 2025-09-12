@@ -10,13 +10,18 @@ model:
 
 # training parameters
 training:
+  # basic training settings
   batch_size: 128
   learning_rate: 1.0e-4
   num_epochs: 10
   reg_loss_weight: 1.0
+
+  # checkpoint and logging
   save_every_n_epoch: 1
   output_dir: 'output_checkpoints'
   sample_every: 1
+
+  # data augmentation
   apply_mixup: True
   apply_spec_augment: True
   mask_active_effects: True
@@ -33,6 +38,11 @@ training:
     warmup_epochs: 2  # warmup period for onecycle
     max_lr: 1e-3  # maximum LR for onecycle
     pct_start: 0.3  # percentage of cycle for onecycle warmup
+
+  # gradient clipping
+  gradient_clipping:
+    enabled: True
+    max_norm: 1.0  # clip gradients to this norm
 
 # preprocessing parameters
 sample_rate: 32000

@@ -374,6 +374,11 @@ def main(args):
             outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)  # Pass mixup_lambda to model
             loss, loss_c, loss_r = criterion(outputs, labels)
             loss.backward()
+
+            # Gradient clipping to prevent spikes
+            if cfg.training.gradient_clipping.enabled:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.gradient_clipping.max_norm)
+
             optimizer.step()
 
             # Step scheduler for OneCycleLR (batch-level stepping)
