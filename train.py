@@ -25,6 +25,23 @@ warnings.filterwarnings("ignore", category=UserWarning, module='torchaudio')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
+def normalize_spectrogram(spectrogram, eps=1e-8, dim=(-2, -1)) -> torch.Tensor:  # expects (..., freq, time) shape
+    """
+    Normalize spectrogram by subtracting mean and dividing by std across frequency and time dimensions.
+    
+    Args:
+        spectrogram: Input spectrogram tensor
+        eps: Small epsilon to avoid division by zero
+        dim: Dimensions to compute mean and std across
+    
+    Returns:
+        Normalized spectrogram tensor
+    """
+    mean = spectrogram.mean(dim=dim, keepdim=True)
+    std = spectrogram.std(dim=dim, keepdim=True)
+    return (spectrogram - mean) / (std + eps)
+
+
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
     def __init__(self, dataset, reg_loss_weight=1.0, label_smoothing=0.05, param_loss_type='smooth_l1'):
@@ -128,6 +145,8 @@ def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram
         # Prepare input for model
         mono_waveform = torch.mean(true_degraded_audio, dim=0).unsqueeze(0).to(device)
         spectrogram = amplitude_to_db(mel_spectrogram(mono_waveform))
+        # Normalize spectrogram per sample
+        spectrogram = normalize_spectrogram(spectrogram)
         spectrogram = spectrogram.unsqueeze(1) # Add channel dim
 
         predicted_label = model(spectrogram, None)
@@ -233,6 +252,8 @@ def main(args):
             # PANNs expect mono, so we average the channels.
             mono_waveforms = torch.mean(waveforms, dim=1)
             spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
+            # Normalize spectrogram per sample
+            spectrograms = normalize_spectrogram(spectrograms)
             # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
             spectrograms = spectrograms.unsqueeze(1)
 

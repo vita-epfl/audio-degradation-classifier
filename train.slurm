@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=0
-#SBATCH --time=00:20:00
+#SBATCH --time=02:00:00
 #SBATCH --partition=l40s
 #SBATCH --output=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.out
 #SBATCH --error=/work/vita/alefevre/programs/audio-degradation-classifier/slurm/logs/%j.err
