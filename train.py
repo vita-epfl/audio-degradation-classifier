@@ -16,7 +16,7 @@ import argparse
 import random
 import numpy as np
 from datetime import datetime
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 from src.dataset import DegradationDataset
 from src.model import get_model
@@ -379,7 +379,7 @@ def main(args):
             
             # Forward pass with mixed precision
             if cfg.training.amp.enabled:
-                with autocast():
+                with autocast('cuda'):
                     outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)
                     loss, loss_c, loss_r = criterion(outputs, labels)
             else:
