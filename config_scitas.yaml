@@ -18,6 +18,8 @@ training:
   output_dir: 'output_checkpoints'
   sample_every: 1
   apply_mixup: True
+  apply_spec_augment: True
+  mask_active_effects: True
 
 # preprocessing parameters
 sample_rate: 32000

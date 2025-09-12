@@ -136,21 +136,25 @@ class CombinedLoss(nn.Module):
         else:
             loss_cls = torch.tensor(0.0, device=y_pred.device)
 
-        # Calculate regression loss only for active effects
-        # Create per-parameter mask based on actual number of params for each effect type
-        param_mask = torch.zeros_like(pred_params)  # (batch, max_effects, max_params)
-        for i in range(y_pred.shape[0]):
-            for j in range(max_effects):
-                if mask[i, j]:
-                    effect_idx = true_classes[i, j].item()
-                    effect_name = self.effect_map_inv[effect_idx]
-                    num_p = self.effect_num_params[effect_name]
-                    param_mask[i, j, :num_p] = 1
+        if cfg.training.mask_active_effects:
+            # Calculate regression loss only for active effects
+            # Create per-parameter mask based on actual number of params for each effect type
+            param_mask = torch.zeros_like(pred_params)  # (batch, max_effects, max_params)
+            for i in range(y_pred.shape[0]):
+                for j in range(max_effects):
+                    if mask[i, j]:
+                        effect_idx = true_classes[i, j].item()
+                        effect_name = self.effect_map_inv[effect_idx]
+                        num_p = self.effect_num_params[effect_name]
+                        param_mask[i, j, :num_p] = 1
 
         # Apply mask to regression loss
         if mask.any():
             loss_reg = self.regression_loss(pred_params, true_params)  # shape (batch, max_effects, max_params)
-            loss_reg = (loss_reg * param_mask).sum() / param_mask.sum()
+            if param_mask.any():
+                loss_reg = (loss_reg * param_mask).sum() / param_mask.sum()
+            else:
+                loss_reg = loss_reg.sum() / mask.sum()
         else:
             loss_reg = torch.tensor(0.0, device=y_pred.device)
 
