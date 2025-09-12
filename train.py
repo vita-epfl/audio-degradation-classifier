@@ -154,8 +154,8 @@ class CombinedLoss(nn.Module):
 
 
         # Combine losses
-        total_loss = loss_cls + self.reg_loss_weight * loss_reg
-        return total_loss, loss_cls, loss_reg
+        total_loss = cls_loss + self.reg_loss_weight * loss_reg
+        return total_loss, cls_loss, loss_reg
 
 def generate_and_log_samples(model, dataset, epoch, device, cfg, mel_spectrogram, amplitude_to_db):
     logging.info(f"Generating audio sample for epoch {epoch}...")
