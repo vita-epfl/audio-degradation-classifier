@@ -22,6 +22,18 @@ training:
   mask_active_effects: True
   mixup_prob: 0.5
 
+  # optimizer parameters
+  optimizer:
+    name: 'adamw'  # 'adam' or 'adamw'
+    weight_decay: 1e-4  # L2 regularization strength
+
+  # scheduler parameters
+  scheduler:
+    name: 'cosine'  # 'cosine', 'onecycle', or 'none'
+    warmup_epochs: 2  # warmup period for onecycle
+    max_lr: 1e-3  # maximum LR for onecycle
+    pct_start: 0.3  # percentage of cycle for onecycle warmup
+
 # preprocessing parameters
 sample_rate: 32000
 hop_length: 320

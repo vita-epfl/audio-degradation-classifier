@@ -261,7 +261,46 @@ def main(args):
     model = get_model(cfg, output_size=sample_label.shape[0])
 
     criterion = CombinedLoss(dataset, reg_loss_weight=cfg.training.reg_loss_weight)
-    optimizer = optim.Adam(model.parameters(), lr=cfg.training.learning_rate)
+    
+    # --- Optimizer ---
+    if cfg.training.optimizer.name.lower() == 'adamw':
+        optimizer = optim.AdamW(
+            model.parameters(), 
+            lr=cfg.training.learning_rate,
+            weight_decay=cfg.training.optimizer.weight_decay
+        )
+        logging.info(f"Using AdamW optimizer with weight_decay={cfg.training.optimizer.weight_decay}")
+    elif cfg.training.optimizer.name.lower() == 'adam':
+        optimizer = optim.Adam(
+            model.parameters(), 
+            lr=cfg.training.learning_rate,
+            weight_decay=cfg.training.optimizer.weight_decay
+        )
+        logging.info(f"Using Adam optimizer with weight_decay={cfg.training.optimizer.weight_decay}")
+    else:
+        raise ValueError(f"Unknown optimizer: {cfg.training.optimizer.name}")
+    
+    # --- Scheduler ---
+    scheduler = None
+    if cfg.training.scheduler.name.lower() == 'cosine':
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=cfg.training.num_epochs
+        )
+        logging.info(f"Using CosineAnnealingLR scheduler")
+    elif cfg.training.scheduler.name.lower() == 'onecycle':
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=cfg.training.scheduler.max_lr,
+            epochs=cfg.training.num_epochs,
+            steps_per_epoch=len(dataloader),
+            pct_start=cfg.training.scheduler.pct_start
+        )
+        logging.info(f"Using OneCycleLR scheduler with max_lr={cfg.training.scheduler.max_lr}")
+    elif cfg.training.scheduler.name.lower() == 'none':
+        logging.info("No scheduler used")
+    else:
+        raise ValueError(f"Unknown scheduler: {cfg.training.scheduler.name}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -337,6 +376,10 @@ def main(args):
             loss.backward()
             optimizer.step()
 
+            # Step scheduler for OneCycleLR (batch-level stepping)
+            if scheduler is not None and cfg.training.scheduler.name.lower() == 'onecycle':
+                scheduler.step()
+
             running_loss += loss.item()
             progress_bar.set_postfix(
                 loss=f'{loss.item():.4f}', 
@@ -364,7 +407,18 @@ def main(args):
             torch.save(model.state_dict(), checkpoint_path)
             logging.info(f'Checkpoint saved to {checkpoint_path}')
 
-    logging.info('Finished Training')
+        # --- Scheduler Step ---
+        if scheduler is not None:
+            if cfg.training.scheduler.name.lower() == 'onecycle':
+                # OneCycleLR steps every batch, already handled in training loop
+                pass
+            else:
+                # CosineAnnealingLR and other epoch-based schedulers step once per epoch
+                scheduler.step()
+                current_lr = optimizer.param_groups[0]['lr']
+                logging.info(f'Epoch {epoch + 1} completed. Learning rate: {current_lr:.6f}')
+                # Log LR to W&B
+                wandb.log({'learning_rate': current_lr, 'epoch': epoch + 1})
 
     # --- Save Final Model --- 
     logging.info('Saving final model...')
