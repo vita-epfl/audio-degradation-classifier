@@ -38,11 +38,15 @@ training:
     warmup_epochs: 2  # warmup period for onecycle
     max_lr: 1e-3  # maximum LR for onecycle
     pct_start: 0.3  # percentage of cycle for onecycle warmup
-
   # gradient clipping
   gradient_clipping:
     enabled: True
     max_norm: 1.0  # clip gradients to this norm
+
+  # mixed precision training
+  amp:
+    enabled: True
+    scaler_growth_interval: 2000  # steps before increasing scaler
 
 # preprocessing parameters
 sample_rate: 32000

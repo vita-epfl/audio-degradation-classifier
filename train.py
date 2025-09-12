@@ -16,6 +16,7 @@ import argparse
 import random
 import numpy as np
 from datetime import datetime
+from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset import DegradationDataset
 from src.model import get_model
@@ -302,6 +303,16 @@ def main(args):
     else:
         raise ValueError(f"Unknown scheduler: {cfg.training.scheduler.name}")
 
+    # --- Mixed Precision (AMP) ---
+    scaler = None
+    if cfg.training.amp.enabled:
+        scaler = GradScaler(
+            growth_interval=cfg.training.amp.scaler_growth_interval
+        )
+        logging.info(f"Using Mixed Precision training with scaler growth interval: {cfg.training.amp.scaler_growth_interval}")
+    else:
+        logging.info("Using full precision training")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     logging.info(f"Using device: {device}")
@@ -371,15 +382,36 @@ def main(args):
                     mixup_lambda = 1.0  # No mixup applied
 
             optimizer.zero_grad()
-            outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)  # Pass mixup_lambda to model
-            loss, loss_c, loss_r = criterion(outputs, labels)
-            loss.backward()
-
-            # Gradient clipping to prevent spikes
-            if cfg.training.gradient_clipping.enabled:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.gradient_clipping.max_norm)
-
-            optimizer.step()
+            
+            # Forward pass with mixed precision
+            if cfg.training.amp.enabled:
+                with autocast():
+                    outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)
+                    loss, loss_c, loss_r = criterion(outputs, labels)
+            else:
+                outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)
+                loss, loss_c, loss_r = criterion(outputs, labels)
+            
+            # Backward pass with scaler
+            if cfg.training.amp.enabled:
+                scaler.scale(loss).backward()
+                
+                # Gradient clipping with scaler
+                if cfg.training.gradient_clipping.enabled:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.gradient_clipping.max_norm)
+                
+                # Optimizer step with scaler
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                
+                # Gradient clipping (already implemented)
+                if cfg.training.gradient_clipping.enabled:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.training.gradient_clipping.max_norm)
+                
+                optimizer.step()
 
             # Step scheduler for OneCycleLR (batch-level stepping)
             if scheduler is not None and cfg.training.scheduler.name.lower() == 'onecycle':
