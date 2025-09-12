@@ -24,8 +24,11 @@ class DegradationDataset(torch.utils.data.Dataset):
 
         # --- Label Encoding Setup ---
         self.effect_map = {name: i for i, name in enumerate(self.sox_generator.available_effects)}
+        self.effect_map['no_effect'] = len(self.effect_map)
+        self.effect_map_inv = {v: k for k, v in self.effect_map.items()}
+
         self.num_effect_types = len(self.effect_map)
-        self.max_effects = 5  # Max number of effects in a chain we can predict
+        self.max_effects = cfg.max_effects  # Read from config
 
         # Determine the max number of parameters any single effect has
         self.max_params = 0
@@ -92,25 +95,30 @@ class DegradationDataset(torch.utils.data.Dataset):
     def encode_label(self, effect_chain):
         """
         Encodes a list of effect strings into a fixed-size tensor.
-        Output shape: (max_effects, num_effect_types + max_params)
         """
         label = torch.zeros(self.max_effects, self.label_item_size)
+        no_effect_idx = self.effect_map['no_effect']
+
+        # Initialize all slots to 'no_effect'
+        for i in range(self.max_effects):
+            label[i, no_effect_idx] = 1.0
 
         for i, effect_str in enumerate(effect_chain):
             if i >= self.max_effects:
-                break  # Stop if we exceed the max number of effects
+                break
 
             parts = effect_str.split()
             effect_name = parts[0]
             params = [float(p) for p in parts[1:]]
 
-            # Set the one-hot vector for the effect type
+            # Clear the 'no_effect' one-hot and set the correct one
+            label[i, no_effect_idx] = 0.0
             effect_idx = self.effect_map[effect_name]
             label[i, effect_idx] = 1.0
 
             # Normalize and store parameters
             param_config = self.sox_generator.effects_config[effect_name]
-            param_keys = list(param_config.keys())  # e.g., ['frequency', 'width_q', 'gain']
+            param_keys = list(param_config.keys())
             param_offset = self.num_effect_types
 
             for j, param_value in enumerate(params):
@@ -130,16 +138,18 @@ class DegradationDataset(torch.utils.data.Dataset):
             label_tensor = label_tensor.view(self.max_effects, self.label_item_size)
 
         effect_chain = []
+        no_effect_idx = self.effect_map.get('no_effect')
+
         for i in range(self.max_effects):
             effect_slot = label_tensor[i]
             class_probs = effect_slot[:self.num_effect_types]
             
             # Find the predicted effect type
             effect_idx = torch.argmax(class_probs).item()
-            effect_name = list(self.effect_map.keys())[list(self.effect_map.values()).index(effect_idx)]
+            effect_name = self.effect_map_inv[effect_idx]
 
-            # Check if it's a real effect (not padding)
-            if effect_slot.sum() == 0: # Simple check for padding
+            # Skip if it's 'no_effect'
+            if effect_name == 'no_effect':
                 continue
 
             # Denormalize parameters

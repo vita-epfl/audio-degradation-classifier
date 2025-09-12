@@ -20,13 +20,20 @@ param_keys_map = None
 num_effect_types = 0
 max_params = 0
 label_item_size = 0
-max_effects = 5 # This was hardcoded in the dataset, so we'll use it here too
+max_effects = None  # Will be set from config
 
 # --- Decoding Logic ---
 def decode_output(output_tensor):
     """Decodes a model output tensor into a human-readable effect chain."""
     if not all([effect_map_inv, param_keys_map]):
         return "Error: Decoding information not initialized."
+
+    # Get no_effect index
+    no_effect_idx = None
+    for idx, name in effect_map_inv.items():
+        if name == 'no_effect':
+            no_effect_idx = idx
+            break
 
     output_tensor = output_tensor.view(max_effects, label_item_size)
     
@@ -37,10 +44,13 @@ def decode_output(output_tensor):
         
         # --- Effect Type Classification ---
         logits = effect_slot[:num_effect_types]
-        if logits.sum() == 0: # Simple check for empty slot
-            continue
-
+        
         pred_effect_idx = torch.argmax(logits).item()
+        
+        # Skip if it's 'no_effect'
+        if pred_effect_idx == no_effect_idx:
+            continue
+            
         effect_name = effect_map_inv.get(pred_effect_idx, "unknown_effect")
 
         # --- Parameter Regression ---
@@ -124,8 +134,13 @@ def main():
         print(f"Error: Config file not found - {e}")
         return
 
+    # Set max_effects from config
+    global max_effects
+    max_effects = cfg.max_effects
+
     # --- Setup Decoding Information ---
     effect_map = {name: i for i, name in enumerate(effects_config.keys())}
+    effect_map['no_effect'] = len(effect_map)  # Add no_effect class
     effect_map_inv = {i: name for name, i in effect_map.items()}
     num_effect_types = len(effect_map)
     

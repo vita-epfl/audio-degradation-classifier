@@ -1,5 +1,6 @@
 # basic setting parameters
 clip_length: 5.0 # [sec]
+max_effects: 5  # Maximum number of effects to predict
 
 # model parameters
 model:
