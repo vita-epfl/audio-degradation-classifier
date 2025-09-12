@@ -31,7 +31,7 @@ training:
   # optimizer parameters
   optimizer:
     name: 'adamw'  # 'adam' or 'adamw'
-    weight_decay: 1e-4  # L2 regularization strength
+    weight_decay: 0.0001  # L2 regularization strength
 
   # scheduler parameters
   scheduler:
