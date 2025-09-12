@@ -306,9 +306,10 @@ def main(args):
             spectrograms = amplitude_to_db(mel_spectrogram(mono_waveforms))
             # Normalize spectrogram per sample
             spectrograms = normalize_spectrogram(spectrograms)
-            # Apply SpecAugment data augmentation during training
-            spectrograms = freq_masking(spectrograms)
-            spectrograms = time_masking(spectrograms)
+            if cfg.training.apply_spec_augment:
+                # Apply SpecAugment data augmentation during training
+                spectrograms = freq_masking(spectrograms)
+                spectrograms = time_masking(spectrograms)
             # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
             spectrograms = spectrograms.unsqueeze(1)
 
