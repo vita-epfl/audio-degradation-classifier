@@ -17,6 +17,7 @@ training:
   save_every_n_epoch: 1
   output_dir: 'output_checkpoints'
   sample_every: 1
+  apply_mixup: True
 
 # preprocessing parameters
 sample_rate: 32000

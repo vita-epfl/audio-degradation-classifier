@@ -42,6 +42,54 @@ def normalize_spectrogram(spectrogram, eps=1e-8, dim=(-2, -1)) -> torch.Tensor: 
     return (spectrogram - mean) / (std + eps)
 
 
+def apply_mixup(spectrograms, labels, mixup_lambda, max_effects=5, num_effect_types=10, max_params=5):
+    """
+    Apply mixup augmentation to spectrograms and labels with proper handling of classification and regression parts.
+    
+    Args:
+        spectrograms: Batch of spectrograms (batch, channels, freq, time)
+        labels: Batch of flattened labels (batch, max_effects * label_item_size)
+        mixup_lambda: Mixing coefficient (0-1)
+        max_effects: Maximum number of effects per sample
+        num_effect_types: Number of effect types (for classification)
+        max_params: Maximum parameters per effect (for regression)
+    
+    Returns:
+        mixed_spectrograms, mixed_labels
+    """
+    batch_size = spectrograms.shape[0]
+    label_item_size = num_effect_types + max_params
+    
+    # Generate random permutation for mixing
+    indices = torch.randperm(batch_size, device=spectrograms.device)
+    
+    # Mix spectrograms
+    mixed_spectrograms = mixup_lambda * spectrograms + (1 - mixup_lambda) * spectrograms[indices]
+    
+    # Mix labels - need to handle classification and regression separately
+    labels_reshaped = labels.view(batch_size, max_effects, label_item_size)
+    labels_indices = labels[indices].view(batch_size, max_effects, label_item_size)
+    
+    # Split into classification (one-hot logits) and regression (parameters) parts
+    class_logits = labels_reshaped[:, :, :num_effect_types]  # (batch, max_effects, num_effect_types)
+    class_logits_indices = labels_indices[:, :, :num_effect_types]
+    
+    reg_params = labels_reshaped[:, :, num_effect_types:]  # (batch, max_effects, max_params)
+    reg_params_indices = labels_indices[:, :, num_effect_types:]
+    
+    # Mix classification logits (these are already in logit form, can interpolate directly)
+    mixed_class_logits = mixup_lambda * class_logits + (1 - mixup_lambda) * class_logits_indices
+    
+    # Mix regression parameters
+    mixed_reg_params = mixup_lambda * reg_params + (1 - mixup_lambda) * reg_params_indices
+    
+    # Combine back
+    mixed_labels_reshaped = torch.cat([mixed_class_logits, mixed_reg_params], dim=-1)
+    mixed_labels = mixed_labels_reshaped.view(batch_size, -1)  # Flatten back
+    
+    return mixed_spectrograms, mixed_labels
+
+
 # --- Custom Loss Function ---
 class CombinedLoss(nn.Module):
     def __init__(self, dataset, reg_loss_weight=1.0, label_smoothing=0.05, param_loss_type='smooth_l1'):
@@ -264,8 +312,22 @@ def main(args):
             # Add a channel dimension to match the model's expected input shape (batch, channel, n_mels, time_steps).
             spectrograms = spectrograms.unsqueeze(1)
 
+            if cfg.training.apply_mixup:
+
+                # Apply Mixup augmentation
+                mixup_lambda = torch.rand(1, device=device).item()  # Random lambda between 0 and 1
+                if mixup_lambda > 0.5:  # Apply mixup with 50% probability, or you can adjust this
+                    spectrograms, labels = apply_mixup(
+                        spectrograms, labels, mixup_lambda, 
+                        max_effects=dataset.max_effects,
+                        num_effect_types=dataset.num_effect_types,
+                        max_params=dataset.max_params
+                    )
+                else:
+                    mixup_lambda = 1.0  # No mixup applied
+
             optimizer.zero_grad()
-            outputs = model(spectrograms, None) # mixup_lambda is None
+            outputs = model(spectrograms, mixup_lambda if cfg.training.apply_mixup else None)  # Pass mixup_lambda to model
             loss, loss_c, loss_r = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
